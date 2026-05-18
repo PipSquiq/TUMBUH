@@ -1,0 +1,17 @@
+names:
+- '0'
+- gurame
+- ikan
+- ikan-mas
+- ikan-pacu
+- telur
+nc: 6
+roboflow:
+  license: CC BY 4.0
+  project: 1850_3_resplit-wcqni
+  url: https://app.roboflow.com/tumbuh/1850_3_resplit-wcqni/1
+  version: 1
+  workspace: tumbuh
+test: ../test/images
+train: ../train/images
+val: ../valid/images
