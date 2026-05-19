@@ -45,6 +45,7 @@ export class ScansController {
   }
 
   @Get(':id')
+
   async findOne(@Param('id') id: string): Promise<ScanEntity> {
     return await this.scansService.findOne(id);
   }

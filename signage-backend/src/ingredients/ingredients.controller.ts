@@ -4,7 +4,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { IngredientsService } from './ingredients.service';
-import { ApiTags, ApiOperation, ApiConsumes, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiConsumes, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { CreateIngredientDto } from './dto/create-ingredient.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -16,6 +16,44 @@ export class IngredientsController {
     private readonly ingredientsService: IngredientsService,
     private readonly cloudinaryService: CloudinaryService,
   ) {}
+
+  /**
+   * ENDPOINT BARU: Upload gambar langsung untuk diidentifikasi AI Python
+   * Menghasilkan detail gizi lengkap dari Ingredient terkait
+   */
+  @Post('scan')
+  @ApiOperation({ summary: 'Upload gambar bahan pangan untuk discan AI dan diambil info gizinya' })
+  @ApiConsumes('multipart/form-data') // Membuka gerbang upload file di Swagger
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        image: { // Key wajib bernama 'image' saat upload file
+          type: 'string',
+          format: 'binary', // Memancing Swagger memunculkan tombol Choose File
+        },
+      },
+    },
+  })
+  @UseInterceptors(
+    FileInterceptor('image', {
+      fileFilter: (req, file, cb) => {
+        if (!file.originalname.match(/\.(jpg|jpeg|png|webp)$/i)) {
+          cb(new BadRequestException('Hanya file gambar (jpg/jpeg/png/webp) yang diperbolehkan'), false);
+        } else {
+          cb(null, true);
+        }
+      },
+      limits: { fileSize: 5 * 1024 * 1024 }, // Limit file dinaikkan ke 5MB agar aman dari kamera HP
+    }),
+  )
+  async uploadAndScanImage(@UploadedFile() file: Express.Multer.File) {
+    if (!file) {
+      throw new BadRequestException('File gambar wajib diunggah');
+    }
+    // Oper file gambar ke service untuk ditembak langsung ke Python Railway
+    return await this.ingredientsService.scanImageWithAi(file);
+  }
 
   @Get('scan/:label')
   @ApiOperation({ summary: 'Mencari data gizi berdasarkan label hasil scan AI' })
