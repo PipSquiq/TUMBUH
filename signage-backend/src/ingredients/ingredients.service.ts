@@ -16,7 +16,7 @@ export class IngredientsService {
    * Logika menjembatani File Gambar dari FE -> Python Railway -> Cocokkan ke DB Postgres
    */
   async scanImageWithAi(file: Express.Multer.File): Promise<IngredientEntity> {
-    const aiServerUrl = 'https://scan-bahan-tumbuh-models-production.up.railway.app/predict';
+    const aiServerUrl = 'https://refreshing-growth-production-ae90.up.railway.app/predict';
 
     try {
       // 1. Bungkus file buffer dari NestJS ke format FormData Python
