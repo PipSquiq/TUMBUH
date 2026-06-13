@@ -1,5 +1,6 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToMany } from 'typeorm';
 import { ApiProperty } from '@nestjs/swagger';
+import { UserEntity } from './user.entity';
 
 @Entity('videos')
 export class VideoEntity {
@@ -100,6 +101,9 @@ export class VideoEntity {
   })
   @Column({ type: 'varchar', length: 50, default: 'active' })
   status: string;
+
+  @ManyToMany(() => UserEntity, (user) => user.likedVideos)
+  likedBy: UserEntity[];
 
   @ApiProperty({
     description: 'Waktu pembuatan video',

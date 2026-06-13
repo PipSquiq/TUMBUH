@@ -1,9 +1,12 @@
-import { Controller, Post, Get, Body, Param, Put, Delete, Query } from '@nestjs/common';
-import { ApiQuery } from '@nestjs/swagger';
+import { Controller, Post, Get, Body, Param, Put, Delete, Query, UseGuards, Req } from '@nestjs/common';
+import { ApiQuery, ApiBearerAuth, ApiTags, ApiOperation } from '@nestjs/swagger';
 import { VideosService } from './videos.service';
 import { CreateVideoDto } from './dto/create-video.dto';
 import { VideoEntity } from '../entities/video.entity';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { UserEntity } from '../entities/user.entity';
 
+@ApiTags('Videos')
 @Controller('videos')
 export class VideosController {
   constructor(private videosService: VideosService) {}
@@ -42,6 +45,25 @@ export class VideosController {
   @Get('category/:category')
   async findByCategory(@Param('category') category: string): Promise<VideoEntity[]> {
     return await this.videosService.findByCategory(category);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Get('liked/me')
+  @ApiOperation({ summary: 'Ambil daftar video yang disukai user aktif' })
+  async getLikedVideos(@Req() req: { user: UserEntity }): Promise<VideoEntity[]> {
+    return await this.videosService.findLikedByUser(req.user);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Post(':id/like')
+  @ApiOperation({ summary: 'Like/Unlike video' })
+  async toggleLike(
+    @Param('id') id: string,
+    @Req() req: { user: UserEntity },
+  ): Promise<{ liked: boolean }> {
+    return await this.videosService.toggleLike(id, req.user);
   }
 
   @Get(':id')

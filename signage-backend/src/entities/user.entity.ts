@@ -11,6 +11,7 @@ import {
 import { ApiProperty } from '@nestjs/swagger';
 import { RecipeEntity } from './recipe.entity';
 import { ProductEntity } from './product.entity';
+import { VideoEntity } from './video.entity';
 
 @Entity('users')
 export class UserEntity {
@@ -41,6 +42,15 @@ export class UserEntity {
     inverseJoinColumn: { name: 'recipeId', referencedColumnName: 'id' },
   })
   likedRecipes: RecipeEntity[]; //
+
+  // --- RELASI KE VIDEO (FAVORIT) ---
+  @ManyToMany(() => VideoEntity, (video) => video.likedBy)
+  @JoinTable({
+    name: 'user_liked_videos',
+    joinColumn: { name: 'userId', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'videoId', referencedColumnName: 'id' },
+  })
+  likedVideos: VideoEntity[];
 
   // --- RELASI KE PRODUK (JUALAN) ---
   @OneToMany(() => ProductEntity, (product: ProductEntity) => product.seller)

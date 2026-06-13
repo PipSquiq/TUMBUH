@@ -3,12 +3,15 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { VideoEntity } from '../entities/video.entity';
 import { CreateVideoDto } from './dto/create-video.dto';
+import { UserEntity } from '../entities/user.entity';
 
 @Injectable()
 export class VideosService {
   constructor(
     @InjectRepository(VideoEntity)
     private videosRepository: Repository<VideoEntity>,
+    @InjectRepository(UserEntity)
+    private usersRepository: Repository<UserEntity>,
   ) {}
 
   async create(createVideoDto: CreateVideoDto): Promise<VideoEntity> {
@@ -197,5 +200,36 @@ export class VideosService {
     }
 
     console.log('Data video berhasil di-seed!');
+  }
+
+  async toggleLike(videoId: string, user: UserEntity): Promise<{ liked: boolean }> {
+    const video = await this.findOne(videoId);
+    const userWithLikes = await this.usersRepository.findOne({
+      where: { id: user.id },
+      relations: ['likedVideos'],
+    });
+
+    if (!userWithLikes) {
+      throw new NotFoundException(`User dengan ID ${user.id} tidak ditemukan`);
+    }
+
+    const isLiked = userWithLikes.likedVideos.some((v) => v.id === video.id);
+
+    if (isLiked) {
+      userWithLikes.likedVideos = userWithLikes.likedVideos.filter((v) => v.id !== video.id);
+    } else {
+      userWithLikes.likedVideos.push(video);
+    }
+
+    await this.usersRepository.save(userWithLikes);
+    return { liked: !isLiked };
+  }
+
+  async findLikedByUser(user: UserEntity): Promise<VideoEntity[]> {
+    const userWithLikes = await this.usersRepository.findOne({
+      where: { id: user.id },
+      relations: ['likedVideos'],
+    });
+    return userWithLikes?.likedVideos || [];
   }
 }
