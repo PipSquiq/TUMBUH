@@ -5,7 +5,7 @@ import {
   ForbiddenException 
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, IsNull } from 'typeorm';
 import { ProductEntity } from '../entities/product.entity';
 import { ProductRatingEntity } from '../entities/product-rating.entity';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -210,6 +210,7 @@ export class ProductsService {
       qty: createOrderDto.qty,
       buyer_name: user.username,
       address: createOrderDto.address,
+      status: 'pending',
       product,
       buyer: user,
     });
@@ -221,6 +222,9 @@ export class ProductsService {
    * Mengambil semua pesanan masuk untuk produk-produk milik penjual
    */
   async getSellerOrders(sellerId: string): Promise<OrderEntity[]> {
+    // Sinkronisasi data lama yang berstatus null menjadi 'pending'
+    await this.ordersRepository.update({ status: IsNull() }, { status: 'pending' });
+
     return await this.ordersRepository.find({
       where: {
         product: {
