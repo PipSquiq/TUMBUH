@@ -89,6 +89,17 @@ export class ProductsController {
     @Req() req: any,
   ): Promise<ProductEntity> {
     createProductDto.sellerId = req.user.id;
+    
+    // Otomatisasi whatsappLink dari nomor telepon akun seller
+    if (!createProductDto.whatsappLink || createProductDto.whatsappLink.trim() === '') {
+      const phone = req.user.phoneNumber || '';
+      const cleanPhone = phone.replace(/[^0-9]/g, '');
+      const formattedPhone = cleanPhone.startsWith('0')
+        ? '62' + cleanPhone.substring(1)
+        : (cleanPhone.startsWith('8') ? '62' + cleanPhone : cleanPhone);
+      createProductDto.whatsappLink = `https://wa.me/${formattedPhone}`;
+    }
+
     if (file) {
       const uploadResult = await this.cloudinaryService.uploadFile(file);
       createProductDto.imageUrl = uploadResult.secure_url;
@@ -143,6 +154,16 @@ export class ProductsController {
     @UploadedFile() file: Express.Multer.File,
     @Req() req: any,
   ): Promise<ProductEntity> {
+    // Otomatisasi/fallback whatsappLink dari nomor telepon akun seller jika kosong
+    if (!updateProductDto.whatsappLink || updateProductDto.whatsappLink.trim() === '') {
+      const phone = req.user.phoneNumber || '';
+      const cleanPhone = phone.replace(/[^0-9]/g, '');
+      const formattedPhone = cleanPhone.startsWith('0')
+        ? '62' + cleanPhone.substring(1)
+        : (cleanPhone.startsWith('8') ? '62' + cleanPhone : cleanPhone);
+      updateProductDto.whatsappLink = `https://wa.me/${formattedPhone}`;
+    }
+
     if (file) {
       const uploadResult = await this.cloudinaryService.uploadFile(file);
       updateProductDto.imageUrl = uploadResult.secure_url;

@@ -47,10 +47,10 @@ export class CreateProductDto {
   @Trim()
   location: string;
 
-  @ApiProperty({ description: 'Link WhatsApp aktif', example: 'https://wa.me/6281234567890' })
-  @IsNotEmpty({ message: 'WhatsApp wajib diisi' })
-  @IsUrl({}, { message: 'Gunakan format link WA yang benar' })
-  whatsappLink: string;
+  @ApiProperty({ description: 'Link WhatsApp aktif', example: 'https://wa.me/6281234567890', required: false })
+  @IsOptional()
+  @IsString()
+  whatsappLink?: string;
 
   @ApiProperty({ description: 'Stok tersedia', example: 10 })
   @Type(() => Number)
