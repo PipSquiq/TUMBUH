@@ -1,5 +1,5 @@
 import {
-  Controller, Post, Get, Body, Param, Put, Delete,
+  Controller, Post, Get, Body, Param, Put, Delete, Patch,
   Query, UseInterceptors, UploadedFile, BadRequestException,
   UseGuards, Req,
 } from '@nestjs/common';
@@ -8,6 +8,7 @@ import { ApiConsumes, ApiBearerAuth, ApiTags, ApiOperation, ApiQuery, ApiBody } 
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { RateProductDto } from './dto/rate-product.dto';
+import { CreateOrderDto } from './dto/create-order.dto';
 import { ProductEntity } from '../entities/product.entity';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
@@ -30,6 +31,17 @@ export class ProductsController {
     @Req() req: any,
   ) {
     return await this.productsService.rateProduct(id, req.user.id, rateProductDto.score);
+  }
+
+  @Post(':id/order')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Input pemesanan produk' })
+  async createOrder(
+    @Param('id') id: string,
+    @Body() createOrderDto: CreateOrderDto,
+    @Req() req: any,
+  ) {
+    return await this.productsService.createOrder(id, req.user, createOrderDto);
   }
 
   @Post()
@@ -151,6 +163,30 @@ export class ProductsController {
   @ApiQuery({ name: 'search', required: false })
   async findAll(@Query('category') category?: string, @Query('search') search?: string) {
     return await this.productsService.findAll(category, search);
+  }
+
+  @Get('seller/orders')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Daftar semua pesanan masuk untuk produk penjual' })
+  async getSellerOrders(@Req() req: any) {
+    return await this.productsService.getSellerOrders(req.user.id);
+  }
+
+  @Get('seller/orders/completed-count')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Jumlah riwayat pesanan yang sudah selesai untuk penjual' })
+  async getCompletedOrdersCount(@Req() req: any) {
+    return await this.productsService.getCompletedOrdersCount(req.user.id);
+  }
+
+  @Patch('seller/orders/:orderId/complete')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Validasi/selesaikan pesanan' })
+  async completeOrder(
+    @Param('orderId') orderId: string,
+    @Req() req: any,
+  ) {
+    return await this.productsService.completeOrder(orderId, req.user.id);
   }
 
   @Get('random')

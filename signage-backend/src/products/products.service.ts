@@ -10,6 +10,8 @@ import { ProductEntity } from '../entities/product.entity';
 import { ProductRatingEntity } from '../entities/product-rating.entity';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UserEntity } from 'src/entities/user.entity';
+import { OrderEntity } from '../entities/order.entity';
+import { CreateOrderDto } from './dto/create-order.dto';
 
 @Injectable()
 export class ProductsService {
@@ -19,6 +21,9 @@ export class ProductsService {
 
     @InjectRepository(ProductRatingEntity)
     private ratingsRepository: Repository<ProductRatingEntity>,
+
+    @InjectRepository(OrderEntity)
+    private ordersRepository: Repository<OrderEntity>,
   ) {}
 
   /**
@@ -172,6 +177,102 @@ export class ProductsService {
 
     // Eksekusi penghapusan objek entity
     await this.productsRepository.remove(product);
+  }
+
+  /**
+   * Membuat pemesanan baru untuk produk tertentu
+   */
+  async createOrder(
+    productId: string,
+    user: UserEntity,
+    createOrderDto: CreateOrderDto,
+  ): Promise<OrderEntity> {
+    const product = await this.findOne(productId);
+
+    if (product.status === 'unavailable') {
+      throw new BadRequestException('Produk tidak tersedia untuk dipesan');
+    }
+
+    if (product.stock < createOrderDto.qty) {
+      throw new BadRequestException('Stok produk tidak mencukupi');
+    }
+
+    // Kurangi stok produk
+    product.stock -= createOrderDto.qty;
+    if (product.stock === 0) {
+      product.status = 'unavailable';
+    }
+    await this.productsRepository.save(product);
+
+    // Buat pesanan baru
+    const order = this.ordersRepository.create({
+      product_name: product.name,
+      qty: createOrderDto.qty,
+      buyer_name: user.username,
+      address: createOrderDto.address,
+      product,
+      buyer: user,
+    });
+
+    return await this.ordersRepository.save(order);
+  }
+
+  /**
+   * Mengambil semua pesanan masuk untuk produk-produk milik penjual
+   */
+  async getSellerOrders(sellerId: string): Promise<OrderEntity[]> {
+    return await this.ordersRepository.find({
+      where: {
+        product: {
+          seller: {
+            id: sellerId,
+          },
+        },
+      },
+      relations: ['product', 'buyer'],
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+  }
+
+  /**
+   * Mengubah status pesanan menjadi selesai (completed)
+   */
+  async completeOrder(orderId: string, sellerId: string): Promise<OrderEntity> {
+    const order = await this.ordersRepository.findOne({
+      where: { id: orderId },
+      relations: ['product', 'product.seller'],
+    });
+
+    if (!order) {
+      throw new NotFoundException('Pesanan tidak ditemukan');
+    }
+
+    if (!order.product || !order.product.seller || order.product.seller.id !== sellerId) {
+      throw new ForbiddenException('Akses Ditolak! Anda bukan pemilik produk untuk pesanan ini.');
+    }
+
+    order.status = 'completed';
+    return await this.ordersRepository.save(order);
+  }
+
+  /**
+   * Mengambil jumlah riwayat pesanan yang sudah selesai
+   */
+  async getCompletedOrdersCount(sellerId: string): Promise<{ completedCount: number }> {
+    const completedCount = await this.ordersRepository.count({
+      where: {
+        status: 'completed',
+        product: {
+          seller: {
+            id: sellerId,
+          },
+        },
+      },
+    });
+
+    return { completedCount };
   }
 
   async seedCatalogData(): Promise<void> {
