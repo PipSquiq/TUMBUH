@@ -188,6 +188,7 @@ export class ProductsService {
     createOrderDto: CreateOrderDto,
   ): Promise<OrderEntity> {
     const product = await this.findOne(productId);
+    console.log(`[createOrder] Found product: ${product.name} (${product.id}), Seller: ${product.seller?.id}, Buyer: ${user.id}`);
 
     if (product.status === 'unavailable') {
       throw new BadRequestException('Produk tidak tersedia untuk dipesan');
@@ -215,17 +216,21 @@ export class ProductsService {
       buyer: user,
     });
 
-    return await this.ordersRepository.save(order);
+    const savedOrder = await this.ordersRepository.save(order);
+    console.log(`[createOrder] Saved order: ${savedOrder.id}, Status: ${savedOrder.status}`);
+    return savedOrder;
   }
 
   /**
    * Mengambil semua pesanan masuk untuk produk-produk milik penjual
    */
   async getSellerOrders(sellerId: string): Promise<OrderEntity[]> {
+    console.log(`[getSellerOrders] Fetching orders for sellerId: ${sellerId}`);
     // Sinkronisasi data lama yang berstatus null menjadi 'pending'
-    await this.ordersRepository.update({ status: IsNull() }, { status: 'pending' });
+    const updateResult = await this.ordersRepository.update({ status: IsNull() }, { status: 'pending' });
+    console.log(`[getSellerOrders] Sync null status count: ${updateResult.affected}`);
 
-    return await this.ordersRepository.find({
+    const orders = await this.ordersRepository.find({
       where: {
         product: {
           seller: {
@@ -233,11 +238,18 @@ export class ProductsService {
           },
         },
       },
-      relations: ['product', 'buyer'],
+      relations: ['product', 'product.seller', 'buyer'],
       order: {
         createdAt: 'DESC',
       },
     });
+
+    console.log(`[getSellerOrders] Found ${orders.length} orders for sellerId: ${sellerId}`);
+    orders.forEach(o => {
+      console.log(`- Order ID: ${o.id}, Product: ${o.product?.name}, Buyer: ${o.buyer_name}, Status: ${o.status}`);
+    });
+
+    return orders;
   }
 
   /**
