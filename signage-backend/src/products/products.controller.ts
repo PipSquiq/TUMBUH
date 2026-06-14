@@ -210,6 +210,16 @@ export class ProductsController {
     return await this.productsService.completeOrder(orderId, req.user.id);
   }
 
+  @Patch('seller/orders/:orderId/reject')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Tolak/batalkan pesanan' })
+  async rejectOrder(
+    @Param('orderId') orderId: string,
+    @Req() req: any,
+  ) {
+    return await this.productsService.rejectOrder(orderId, req.user.id);
+  }
+
   @Get('random')
   @ApiOperation({ summary: 'Ambil 4 produk acak' })
   async findRandom() {

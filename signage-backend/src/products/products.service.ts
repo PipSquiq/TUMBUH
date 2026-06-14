@@ -269,7 +269,50 @@ export class ProductsService {
       throw new ForbiddenException('Akses Ditolak! Anda bukan pemilik produk untuk pesanan ini.');
     }
 
+    if (order.status === 'rejected') {
+      throw new BadRequestException('Pesanan yang sudah ditolak tidak dapat diselesaikan');
+    }
+
     order.status = 'completed';
+    return await this.ordersRepository.save(order);
+  }
+
+  /**
+   * Menolak/membatalkan pesanan dan mengembalikan stok produk
+   */
+  async rejectOrder(orderId: string, sellerId: string): Promise<OrderEntity> {
+    const order = await this.ordersRepository.findOne({
+      where: { id: orderId },
+      relations: ['product', 'product.seller'],
+    });
+
+    if (!order) {
+      throw new NotFoundException('Pesanan tidak ditemukan');
+    }
+
+    if (!order.product || !order.product.seller || order.product.seller.id !== sellerId) {
+      throw new ForbiddenException('Akses Ditolak! Anda bukan pemilik produk untuk pesanan ini.');
+    }
+
+    if (order.status === 'completed') {
+      throw new BadRequestException('Pesanan yang sudah selesai tidak dapat ditolak');
+    }
+
+    if (order.status === 'rejected') {
+      throw new BadRequestException('Pesanan sudah ditolak');
+    }
+
+    order.status = 'rejected';
+
+    // Kembalikan stok produk jika produk masih ada
+    if (order.product) {
+      order.product.stock += order.qty;
+      if (order.product.stock > 0 && order.product.status === 'unavailable') {
+        order.product.status = 'available';
+      }
+      await this.productsRepository.save(order.product);
+    }
+
     return await this.ordersRepository.save(order);
   }
 

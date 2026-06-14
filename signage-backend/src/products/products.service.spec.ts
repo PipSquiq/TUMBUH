@@ -91,6 +91,10 @@ describe('ProductsService', () => {
           useValue: {
             create: jest.fn(),
             save: jest.fn(),
+            findOne: jest.fn(),
+            find: jest.fn(),
+            count: jest.fn(),
+            update: jest.fn().mockResolvedValue({ affected: 0 }),
           },
         },
       ],
@@ -110,9 +114,10 @@ describe('ProductsService', () => {
 
       expect(result).toEqual(mockProduct);
       // ✅ Cek apakah repository.create dipanggil dengan objek seller yang benar
+      const { sellerId, ...productData } = createProductDto;
       expect(repository.create).toHaveBeenCalledWith({
-        ...createProductDto,
-        seller: { id: createProductDto.sellerId },
+        ...productData,
+        seller: { id: sellerId },
       });
     });
   });
@@ -273,6 +278,80 @@ describe('ProductsService', () => {
       await expect(
         service.completeOrder('non-existent-order', mockSeller.id),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('rejectOrder', () => {
+    it('should reject order successfully and restore product stock', async () => {
+      const mockOrder = {
+        id: 'order-uuid',
+        product_name: mockProduct.name,
+        qty: 5,
+        buyer_name: 'buyer',
+        status: 'pending',
+        product: { ...mockProduct, stock: 45, status: 'unavailable' },
+      };
+
+      jest.spyOn(orderRepository, 'findOne').mockResolvedValue(mockOrder as any);
+      const orderSaveSpy = jest.spyOn(orderRepository, 'save').mockResolvedValue({
+        ...mockOrder,
+        status: 'rejected',
+      } as any);
+      const productSaveSpy = jest.spyOn(repository, 'save').mockResolvedValue({
+        ...mockOrder.product,
+        stock: 50,
+        status: 'available',
+      } as any);
+
+      const result = await service.rejectOrder('order-uuid', mockSeller.id);
+
+      expect(result.status).toBe('rejected');
+      expect(orderSaveSpy).toHaveBeenCalled();
+      expect(productSaveSpy).toHaveBeenCalled();
+      expect(mockOrder.product.stock).toBe(50); // 45 + 5
+      expect(mockOrder.product.status).toBe('available');
+    });
+
+    it('should throw ForbiddenException if user is not the seller of the product', async () => {
+      const mockOrder = {
+        id: 'order-uuid',
+        product_name: mockProduct.name,
+        qty: 1,
+        buyer_name: 'buyer',
+        status: 'pending',
+        product: mockProduct,
+      };
+
+      jest.spyOn(orderRepository, 'findOne').mockResolvedValue(mockOrder as any);
+
+      await expect(
+        service.rejectOrder('order-uuid', 'wrong-seller-id'),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should throw NotFoundException if order does not exist', async () => {
+      jest.spyOn(orderRepository, 'findOne').mockResolvedValue(null);
+
+      await expect(
+        service.rejectOrder('non-existent-order', mockSeller.id),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw BadRequestException if order is already completed', async () => {
+      const mockOrder = {
+        id: 'order-uuid',
+        product_name: mockProduct.name,
+        qty: 1,
+        buyer_name: 'buyer',
+        status: 'completed',
+        product: mockProduct,
+      };
+
+      jest.spyOn(orderRepository, 'findOne').mockResolvedValue(mockOrder as any);
+
+      await expect(
+        service.rejectOrder('order-uuid', mockSeller.id),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 

@@ -51,7 +51,7 @@ export class OrderEntity {
   @ApiProperty({
     description: 'Status pemesanan',
     example: 'pending',
-    enum: ['pending', 'completed'],
+    enum: ['pending', 'completed', 'rejected'],
     default: 'pending',
   })
   @Column({ type: 'varchar', length: 50, default: 'pending' })
