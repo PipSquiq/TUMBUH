@@ -12,6 +12,8 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UserEntity } from 'src/entities/user.entity';
 import { OrderEntity } from '../entities/order.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { SellerPaymentEntity } from '../entities/seller-payment.entity';
+import { RegisterSellerDto } from './dto/register-seller.dto';
 
 @Injectable()
 export class ProductsService {
@@ -24,14 +26,178 @@ export class ProductsService {
 
     @InjectRepository(OrderEntity)
     private ordersRepository: Repository<OrderEntity>,
+
+    @InjectRepository(SellerPaymentEntity)
+    private sellerPaymentsRepository: Repository<SellerPaymentEntity>,
+
+    @InjectRepository(UserEntity)
+    private usersRepository: Repository<UserEntity>,
   ) {}
+
+  // =============================================
+  // SELLER REGISTRATION & MANAGEMENT
+  // =============================================
+
+  /**
+   * Daftar sebagai penjual dengan data pembayaran
+   */
+  async registerAsSeller(userId: string, dto: RegisterSellerDto): Promise<{ message: string; isSeller: boolean; paymentMethods: SellerPaymentEntity[] }> {
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User tidak ditemukan');
+    }
+
+    if (user.isSeller) {
+      throw new BadRequestException('Anda sudah terdaftar sebagai penjual');
+    }
+
+    // Simpan metode pembayaran
+    const paymentEntities: SellerPaymentEntity[] = [];
+    for (const pm of dto.paymentMethods) {
+      const payment = this.sellerPaymentsRepository.create({
+        type: pm.type,
+        provider: pm.provider || null,
+        accountNumber: pm.accountNumber || null,
+        accountName: pm.accountName || null,
+        user: { id: userId } as UserEntity,
+      } as Partial<SellerPaymentEntity>);
+      const saved = await this.sellerPaymentsRepository.save(payment as SellerPaymentEntity);
+      paymentEntities.push(saved as SellerPaymentEntity);
+    }
+
+    // Set user sebagai penjual
+    user.isSeller = true;
+    await this.usersRepository.save(user);
+
+    return {
+      message: 'Berhasil terdaftar sebagai penjual!',
+      isSeller: true,
+      paymentMethods: paymentEntities,
+    };
+  }
+
+  /**
+   * Cek status penjual dan data pembayaran
+   */
+  async getSellerStatus(userId: string): Promise<{ isSeller: boolean; paymentMethods: SellerPaymentEntity[] }> {
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+      relations: ['sellerPayments'],
+    });
+
+    if (!user) {
+      throw new NotFoundException('User tidak ditemukan');
+    }
+
+    return {
+      isSeller: user.isSeller,
+      paymentMethods: user.sellerPayments || [],
+    };
+  }
+
+  /**
+   * Ambil daftar metode pembayaran penjual
+   */
+  async getSellerPayments(userId: string): Promise<SellerPaymentEntity[]> {
+    return await this.sellerPaymentsRepository.find({
+      where: { user: { id: userId } },
+    });
+  }
+
+  /**
+   * Update metode pembayaran penjual (hapus semua lalu buat ulang)
+   */
+  async updateSellerPayments(userId: string, dto: RegisterSellerDto): Promise<{ message: string; paymentMethods: SellerPaymentEntity[] }> {
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User tidak ditemukan');
+    }
+    if (!user.isSeller) {
+      throw new ForbiddenException('Anda belum terdaftar sebagai penjual');
+    }
+
+    // Hapus semua pembayaran lama
+    await this.sellerPaymentsRepository.delete({ user: { id: userId } });
+
+    // Simpan pembayaran baru
+    const paymentEntities: SellerPaymentEntity[] = [];
+    for (const pm of dto.paymentMethods) {
+      const payment = this.sellerPaymentsRepository.create({
+        type: pm.type,
+        provider: pm.provider || null,
+        accountNumber: pm.accountNumber || null,
+        accountName: pm.accountName || null,
+        user: { id: userId } as UserEntity,
+      } as Partial<SellerPaymentEntity>);
+      const saved = await this.sellerPaymentsRepository.save(payment as SellerPaymentEntity);
+      paymentEntities.push(saved as SellerPaymentEntity);
+    }
+
+    return {
+      message: 'Metode pembayaran berhasil diperbarui!',
+      paymentMethods: paymentEntities,
+    };
+  }
+
+  /**
+   * Mencabut status penjual (deactivate seller)
+   * Hanya bisa jika tidak ada pesanan pending
+   */
+  async deactivateSeller(userId: string): Promise<{ message: string; isSeller: boolean }> {
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User tidak ditemukan');
+    }
+    if (!user.isSeller) {
+      throw new BadRequestException('Anda belum terdaftar sebagai penjual');
+    }
+
+    // Cek apakah masih ada pesanan pending
+    const pendingOrders = await this.ordersRepository.count({
+      where: {
+        status: 'pending',
+        product: {
+          seller: { id: userId },
+        },
+      },
+    });
+
+    if (pendingOrders > 0) {
+      throw new BadRequestException(
+        `Tidak dapat mencabut status penjual. Masih ada ${pendingOrders} pesanan yang belum diselesaikan.`
+      );
+    }
+
+    // Hapus semua metode pembayaran
+    await this.sellerPaymentsRepository.delete({ user: { id: userId } });
+
+    // Set isSeller = false
+    user.isSeller = false;
+    await this.usersRepository.save(user);
+
+    return {
+      message: 'Status penjual berhasil dicabut.',
+      isSeller: false,
+    };
+  }
+
+  // =============================================
+  // PRODUCT CRUD
+  // =============================================
 
   /**
    * Create Product
    * Seller ID otomatis diambil dari User yang sedang login
+   * Hanya user yang sudah terdaftar penjual yang boleh buat produk
    */
   async create(createProductDto: CreateProductDto): Promise<ProductEntity> {
     const { sellerId, ...productData } = createProductDto;
+
+    // Validasi: hanya penjual terdaftar yang boleh buat produk
+    const seller = await this.usersRepository.findOne({ where: { id: sellerId } });
+    if (!seller || !seller.isSeller) {
+      throw new ForbiddenException('Anda harus terdaftar sebagai penjual untuk menambahkan produk. Silakan daftar sebagai penjual terlebih dahulu.');
+    }
 
     const product = this.productsRepository.create({
       ...productData,
@@ -181,6 +347,7 @@ export class ProductsService {
 
   /**
    * Membuat pemesanan baru untuk produk tertentu
+   * Penjual TIDAK boleh membeli produk miliknya sendiri
    */
   async createOrder(
     productId: string,
@@ -189,6 +356,11 @@ export class ProductsService {
   ): Promise<OrderEntity> {
     const product = await this.findOne(productId);
     console.log(`[createOrder] Found product: ${product.name} (${product.id}), Seller: ${product.seller?.id}, Buyer: ${user.id}`);
+
+    // Validasi: penjual tidak boleh membeli produk miliknya sendiri
+    if (product.seller && product.seller.id === user.id) {
+      throw new BadRequestException('Anda tidak dapat membeli produk milik Anda sendiri.');
+    }
 
     if (product.status === 'unavailable') {
       throw new BadRequestException('Produk tidak tersedia untuk dipesan');

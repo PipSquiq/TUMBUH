@@ -9,6 +9,7 @@ import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { RateProductDto } from './dto/rate-product.dto';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { RegisterSellerDto } from './dto/register-seller.dto';
 import { ProductEntity } from '../entities/product.entity';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
@@ -21,6 +22,55 @@ export class ProductsController {
     private readonly productsService: ProductsService,
     private readonly cloudinaryService: CloudinaryService,
   ) {}
+
+  // =============================================
+  // SELLER REGISTRATION & MANAGEMENT ENDPOINTS
+  // =============================================
+
+  @Post('seller/register')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Daftar sebagai penjual dengan data pembayaran' })
+  async registerAsSeller(
+    @Body() registerSellerDto: RegisterSellerDto,
+    @Req() req: any,
+  ) {
+    return await this.productsService.registerAsSeller(req.user.id, registerSellerDto);
+  }
+
+  @Get('seller/status')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Cek status penjual (isSeller + data pembayaran)' })
+  async getSellerStatus(@Req() req: any) {
+    return await this.productsService.getSellerStatus(req.user.id);
+  }
+
+  @Get('seller/payments')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Ambil daftar metode pembayaran penjual' })
+  async getSellerPayments(@Req() req: any) {
+    return await this.productsService.getSellerPayments(req.user.id);
+  }
+
+  @Put('seller/payments')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Update metode pembayaran penjual' })
+  async updateSellerPayments(
+    @Body() registerSellerDto: RegisterSellerDto,
+    @Req() req: any,
+  ) {
+    return await this.productsService.updateSellerPayments(req.user.id, registerSellerDto);
+  }
+
+  @Delete('seller/register')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Mencabut status penjual (deactivate)' })
+  async deactivateSeller(@Req() req: any) {
+    return await this.productsService.deactivateSeller(req.user.id);
+  }
+
+  // =============================================
+  // PRODUCT & ORDER ENDPOINTS
+  // =============================================
 
   @Post(':id/rate')
   @UseGuards(JwtAuthGuard)
@@ -46,7 +96,7 @@ export class ProductsController {
 
   @Post()
   @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Tambah produk baru' })
+  @ApiOperation({ summary: 'Tambah produk baru (hanya penjual terdaftar)' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {

@@ -8,14 +8,17 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UserEntity } from '../entities/user.entity';
 import { ProductRatingEntity } from '../entities/product-rating.entity';
 import { OrderEntity } from '../entities/order.entity';
+import { SellerPaymentEntity } from '../entities/seller-payment.entity';
 
 describe('ProductsService', () => {
   let service: ProductsService;
   let repository: Repository<ProductEntity>;
   let orderRepository: Repository<OrderEntity>;
+  let userRepository: Repository<UserEntity>;
+  let sellerPaymentRepository: Repository<SellerPaymentEntity>;
 
   // Mock data yang sudah disesuaikan dengan relasi
-  const mockSeller = { id: 'user-uuid-123', username: 'Ayu' } as UserEntity;
+  const mockSeller = { id: 'user-uuid-123', username: 'Ayu', isSeller: true } as UserEntity;
 
   const mockProduct: ProductEntity = {
     id: '550e8400-e29b-41d4-a716-446655440000',
@@ -75,6 +78,7 @@ describe('ProductsService', () => {
             update: jest.fn(),
             delete: jest.fn(),
             count: jest.fn(),
+            remove: jest.fn(),
           },
         },
         {
@@ -97,28 +101,173 @@ describe('ProductsService', () => {
             update: jest.fn().mockResolvedValue({ affected: 0 }),
           },
         },
+        {
+          provide: getRepositoryToken(SellerPaymentEntity),
+          useValue: {
+            create: jest.fn(),
+            save: jest.fn(),
+            find: jest.fn(),
+            findOne: jest.fn(),
+            delete: jest.fn(),
+          },
+        },
+        {
+          provide: getRepositoryToken(UserEntity),
+          useValue: {
+            findOne: jest.fn(),
+            save: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
     service = module.get<ProductsService>(ProductsService);
     repository = module.get<Repository<ProductEntity>>(getRepositoryToken(ProductEntity));
     orderRepository = module.get<Repository<OrderEntity>>(getRepositoryToken(OrderEntity));
+    userRepository = module.get<Repository<UserEntity>>(getRepositoryToken(UserEntity));
+    sellerPaymentRepository = module.get<Repository<SellerPaymentEntity>>(getRepositoryToken(SellerPaymentEntity));
   });
 
+  // =============================================
+  // SELLER REGISTRATION TESTS
+  // =============================================
+
+  describe('registerAsSeller', () => {
+    it('should register user as seller successfully', async () => {
+      const mockUser = { id: 'user-uuid', username: 'testuser', isSeller: false } as UserEntity;
+      const dto = {
+        paymentMethods: [
+          { type: 'bank_transfer', provider: 'BCA', accountNumber: '1234567890', accountName: 'Test User' },
+        ],
+      };
+
+      const mockPayment = { id: 'payment-uuid', type: 'bank_transfer', provider: 'BCA', accountNumber: '1234567890', accountName: 'Test User' };
+
+      jest.spyOn(userRepository, 'findOne').mockResolvedValue(mockUser);
+      jest.spyOn(sellerPaymentRepository, 'create').mockReturnValue(mockPayment as any);
+      jest.spyOn(sellerPaymentRepository, 'save').mockResolvedValue(mockPayment as any);
+      jest.spyOn(userRepository, 'save').mockResolvedValue({ ...mockUser, isSeller: true } as any);
+
+      const result = await service.registerAsSeller('user-uuid', dto);
+
+      expect(result.isSeller).toBe(true);
+      expect(result.message).toBe('Berhasil terdaftar sebagai penjual!');
+      expect(result.paymentMethods).toHaveLength(1);
+    });
+
+    it('should throw BadRequestException if user is already a seller', async () => {
+      const mockUser = { id: 'user-uuid', username: 'testuser', isSeller: true } as UserEntity;
+      jest.spyOn(userRepository, 'findOne').mockResolvedValue(mockUser);
+
+      await expect(
+        service.registerAsSeller('user-uuid', { paymentMethods: [] }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw NotFoundException if user not found', async () => {
+      jest.spyOn(userRepository, 'findOne').mockResolvedValue(null);
+
+      await expect(
+        service.registerAsSeller('non-existent', { paymentMethods: [] }),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('getSellerStatus', () => {
+    it('should return seller status with payment methods', async () => {
+      const mockUser = {
+        id: 'user-uuid',
+        isSeller: true,
+        sellerPayments: [{ id: 'p1', type: 'bank_transfer', provider: 'BCA' }],
+      } as any;
+
+      jest.spyOn(userRepository, 'findOne').mockResolvedValue(mockUser);
+
+      const result = await service.getSellerStatus('user-uuid');
+
+      expect(result.isSeller).toBe(true);
+      expect(result.paymentMethods).toHaveLength(1);
+    });
+
+    it('should return isSeller false for non-seller user', async () => {
+      const mockUser = {
+        id: 'user-uuid',
+        isSeller: false,
+        sellerPayments: [],
+      } as any;
+
+      jest.spyOn(userRepository, 'findOne').mockResolvedValue(mockUser);
+
+      const result = await service.getSellerStatus('user-uuid');
+
+      expect(result.isSeller).toBe(false);
+      expect(result.paymentMethods).toHaveLength(0);
+    });
+  });
+
+  describe('deactivateSeller', () => {
+    it('should deactivate seller successfully when no pending orders', async () => {
+      const mockUser = { id: 'user-uuid', isSeller: true } as UserEntity;
+
+      jest.spyOn(userRepository, 'findOne').mockResolvedValue(mockUser);
+      jest.spyOn(orderRepository, 'count').mockResolvedValue(0);
+      jest.spyOn(sellerPaymentRepository, 'delete').mockResolvedValue({ affected: 1 } as any);
+      jest.spyOn(userRepository, 'save').mockResolvedValue({ ...mockUser, isSeller: false } as any);
+
+      const result = await service.deactivateSeller('user-uuid');
+
+      expect(result.isSeller).toBe(false);
+      expect(result.message).toBe('Status penjual berhasil dicabut.');
+    });
+
+    it('should throw BadRequestException if there are pending orders', async () => {
+      const mockUser = { id: 'user-uuid', isSeller: true } as UserEntity;
+
+      jest.spyOn(userRepository, 'findOne').mockResolvedValue(mockUser);
+      jest.spyOn(orderRepository, 'count').mockResolvedValue(3);
+
+      await expect(
+        service.deactivateSeller('user-uuid'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException if user is not a seller', async () => {
+      const mockUser = { id: 'user-uuid', isSeller: false } as UserEntity;
+      jest.spyOn(userRepository, 'findOne').mockResolvedValue(mockUser);
+
+      await expect(
+        service.deactivateSeller('user-uuid'),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  // =============================================
+  // PRODUCT CRUD TESTS
+  // =============================================
+
   describe('create', () => {
-    it('should create a product successfully', async () => {
+    it('should create a product successfully when user is a seller', async () => {
+      jest.spyOn(userRepository, 'findOne').mockResolvedValue(mockSeller);
       jest.spyOn(repository, 'create').mockReturnValue(mockProduct);
       jest.spyOn(repository, 'save').mockResolvedValue(mockProduct);
 
       const result = await service.create(createProductDto);
 
       expect(result).toEqual(mockProduct);
-      // ✅ Cek apakah repository.create dipanggil dengan objek seller yang benar
       const { sellerId, ...productData } = createProductDto;
       expect(repository.create).toHaveBeenCalledWith({
         ...productData,
         seller: { id: sellerId },
       });
+    });
+
+    it('should throw ForbiddenException if user is not a seller', async () => {
+      const nonSellerUser = { id: 'user-uuid', isSeller: false } as UserEntity;
+      jest.spyOn(userRepository, 'findOne').mockResolvedValue(nonSellerUser);
+
+      await expect(
+        service.create(createProductDto),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 
@@ -189,6 +338,16 @@ describe('ProductsService', () => {
       expect(result).toEqual(mockOrder);
       expect(productSaveSpy).toHaveBeenCalled();
       expect(mockProduct.stock).toBe(48); // 50 - 2
+    });
+
+    it('should throw BadRequestException if seller tries to buy own product', async () => {
+      const sellerAsBuyer = { id: 'user-uuid-123', username: 'Ayu' } as UserEntity;
+
+      jest.spyOn(service, 'findOne').mockResolvedValue(mockProduct);
+
+      await expect(
+        service.createOrder(mockProduct.id, sellerAsBuyer, { qty: 1, address: 'Jl. Test' }),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('should throw BadRequestException if product is unavailable', async () => {

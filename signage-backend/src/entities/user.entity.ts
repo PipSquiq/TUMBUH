@@ -12,6 +12,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { RecipeEntity } from './recipe.entity';
 import { ProductEntity } from './product.entity';
 import { VideoEntity } from './video.entity';
+import { SellerPaymentEntity } from './seller-payment.entity';
 
 @Entity('users')
 export class UserEntity {
@@ -55,6 +56,15 @@ export class UserEntity {
   // --- RELASI KE PRODUK (JUALAN) ---
   @OneToMany(() => ProductEntity, (product: ProductEntity) => product.seller)
   products: ProductEntity[]; // Sinkronisasi dengan ProductEntity.seller
+
+  // --- STATUS PENJUAL ---
+  @ApiProperty({ example: false, default: false })
+  @Column({ default: false })
+  isSeller: boolean;
+
+  // --- RELASI KE DATA PEMBAYARAN PENJUAL ---
+  @OneToMany(() => SellerPaymentEntity, (payment) => payment.user)
+  sellerPayments: SellerPaymentEntity[];
 
   @CreateDateColumn()
   createdAt: Date;

@@ -19,6 +19,7 @@ import { UserEntity } from './entities/user.entity';
 import { IngredientEntity } from './entities/ingredient.entity';
 import { ProductRatingEntity } from 'src/entities/product-rating.entity'; // Sesuaikan path-nya
 import { OrderEntity } from './entities/order.entity';
+import { SellerPaymentEntity } from './entities/seller-payment.entity';
 
 // Modules (Jika ada module terpisah)
 import { UsersModule } from './users/users.module';
@@ -93,6 +94,7 @@ import { IngredientsService } from './ingredients/ingredients.service';
       UserEntity,
       IngredientEntity,
       OrderEntity,
+      SellerPaymentEntity,
     ]),
   ],
   controllers: [
