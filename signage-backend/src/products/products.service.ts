@@ -48,7 +48,12 @@ export class ProductsService {
     }
 
     if (user.isSeller) {
-      throw new BadRequestException('Anda sudah terdaftar sebagai penjual');
+      const paymentCount = await this.sellerPaymentsRepository.count({
+        where: { user: { id: userId } },
+      });
+      if (paymentCount > 0) {
+        throw new BadRequestException('Anda sudah terdaftar sebagai penjual');
+      }
     }
 
     // Simpan metode pembayaran
