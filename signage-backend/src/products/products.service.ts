@@ -480,6 +480,9 @@ export class ProductsService {
     }
 
     order.status = 'completed';
+    if (order.payment_method && order.payment_method.toUpperCase() === 'COD') {
+      order.payment_status = 'verified';
+    }
     return await this.ordersRepository.save(order);
   }
 
