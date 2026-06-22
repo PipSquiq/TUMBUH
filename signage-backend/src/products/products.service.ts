@@ -395,7 +395,19 @@ export class ProductsService {
 
     const savedOrder = await this.ordersRepository.save(order);
     console.log(`[createOrder] Saved order: ${savedOrder.id}, Status: ${savedOrder.status}`);
-    return savedOrder;
+    const orderWithRelations = await this.ordersRepository.findOne({
+      where: { id: savedOrder.id },
+      relations: [
+        'product',
+        'product.seller',
+        'product.seller.sellerPayments',
+        'buyer',
+      ],
+    });
+    if (!orderWithRelations) {
+      throw new NotFoundException('Gagal memuat pesanan setelah dibuat.');
+    }
+    return orderWithRelations;
   }
 
   /**
@@ -480,6 +492,7 @@ export class ProductsService {
     }
 
     order.status = 'rejected';
+    order.payment_status = 'rejected';
 
     // Kembalikan stok produk jika produk masih ada
     if (order.product) {
@@ -488,6 +501,71 @@ export class ProductsService {
         order.product.status = 'available';
       }
       await this.productsRepository.save(order.product);
+    }
+
+    return await this.ordersRepository.save(order);
+  }
+
+  /**
+   * Mengunggah bukti pembayaran pembeli
+   */
+  async uploadPaymentProof(
+    orderId: string,
+    buyerId: string,
+    secureUrl: string,
+  ): Promise<OrderEntity> {
+    const order = await this.ordersRepository.findOne({
+      where: { id: orderId },
+      relations: ['buyer', 'product', 'product.seller', 'product.seller.sellerPayments'],
+    });
+
+    if (!order) {
+      throw new NotFoundException('Pesanan tidak ditemukan');
+    }
+
+    if (!order.buyer || order.buyer.id !== buyerId) {
+      throw new ForbiddenException('Akses Ditolak! Anda bukan pembeli untuk pesanan ini.');
+    }
+
+    if (order.status === 'completed' || order.status === 'rejected') {
+      throw new BadRequestException('Pesanan sudah selesai atau ditolak, tidak dapat mengunggah bukti pembayaran.');
+    }
+
+    order.payment_proof = secureUrl;
+    order.payment_status = 'waiting';
+
+    return await this.ordersRepository.save(order);
+  }
+
+  /**
+   * Validasi bukti pembayaran oleh penjual
+   */
+  async validatePayment(
+    orderId: string,
+    sellerId: string,
+    paymentStatus: 'verified' | 'rejected',
+  ): Promise<OrderEntity> {
+    const order = await this.ordersRepository.findOne({
+      where: { id: orderId },
+      relations: ['product', 'product.seller', 'buyer'],
+    });
+
+    if (!order) {
+      throw new NotFoundException('Pesanan tidak ditemukan');
+    }
+
+    if (!order.product || !order.product.seller || order.product.seller.id !== sellerId) {
+      throw new ForbiddenException('Akses Ditolak! Anda bukan pemilik produk untuk pesanan ini.');
+    }
+
+    if (order.status === 'completed' || order.status === 'rejected') {
+      throw new BadRequestException('Status pesanan sudah selesai atau ditolak.');
+    }
+
+    order.payment_status = paymentStatus;
+
+    if (paymentStatus === 'verified') {
+      order.status = 'completed';
     }
 
     return await this.ordersRepository.save(order);

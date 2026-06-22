@@ -57,6 +57,23 @@ export class OrderEntity {
   @Column({ type: 'varchar', length: 50, default: 'pending' })
   status: string;
 
+  @ApiProperty({
+    description: 'Bukti pembayaran berupa URL gambar',
+    example: 'https://cloudinary.com/...',
+    required: false,
+  })
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  payment_proof: string;
+
+  @ApiProperty({
+    description: 'Status pembayaran',
+    example: 'unpaid',
+    enum: ['unpaid', 'waiting', 'verified', 'rejected'],
+    default: 'unpaid',
+  })
+  @Column({ type: 'varchar', length: 50, default: 'unpaid' })
+  payment_status: string;
+
   @ManyToOne(() => ProductEntity, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'productId' })
   product: ProductEntity;

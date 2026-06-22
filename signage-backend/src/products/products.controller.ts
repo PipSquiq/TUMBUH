@@ -250,6 +250,56 @@ export class ProductsController {
     return await this.productsService.getCompletedOrdersCount(req.user.id);
   }
 
+  @Patch('seller/orders/:orderId/validate-payment')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Validasi/verifikasi bukti pembayaran (penjual)' })
+  async validatePayment(
+    @Param('orderId') orderId: string,
+    @Body() body: { status: 'verified' | 'rejected' },
+    @Req() req: any,
+  ) {
+    if (!body.status || (body.status !== 'verified' && body.status !== 'rejected')) {
+      throw new BadRequestException('Status validasi tidak valid (harus verified atau rejected)');
+    }
+    return await this.productsService.validatePayment(orderId, req.user.id, body.status);
+  }
+
+  @Patch('orders/:orderId/payment-proof')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Unggah bukti pembayaran (pembeli)' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        image: { type: 'string', format: 'binary' },
+      },
+    },
+  })
+  @UseInterceptors(
+    FileInterceptor('image', {
+      fileFilter: (req, file, cb) => {
+        if (!file.originalname.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+          cb(new BadRequestException('Hanya file gambar yang diperbolehkan'), false);
+        } else {
+          cb(null, true);
+        }
+      },
+      limits: { fileSize: 5 * 1024 * 1024 },
+    }),
+  )
+  async uploadPaymentProof(
+    @Param('orderId') orderId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: any,
+  ) {
+    if (!file) {
+      throw new BadRequestException('File gambar bukti transfer wajib diunggah');
+    }
+    const uploadResult = await this.cloudinaryService.uploadFile(file);
+    return await this.productsService.uploadPaymentProof(orderId, req.user.id, uploadResult.secure_url);
+  }
+
   @Patch('seller/orders/:orderId/complete')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Validasi/selesaikan pesanan' })
