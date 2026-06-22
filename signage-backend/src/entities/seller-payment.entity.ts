@@ -18,7 +18,7 @@ export class SellerPaymentEntity {
 
   @ApiProperty({
     description: 'Jenis pembayaran',
-    enum: ['bank_transfer', 'e_wallet', 'cod'],
+    enum: ['bank_transfer', 'e_wallet', 'cod', 'qris'],
     example: 'bank_transfer',
   })
   @Column({
@@ -50,6 +50,14 @@ export class SellerPaymentEntity {
   })
   @Column({ type: 'varchar', length: 150, nullable: true })
   accountName: string;
+
+  @ApiProperty({
+    description: 'URL gambar QRIS',
+    example: 'https://cloudinary.com/...',
+    required: false,
+  })
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  qrisImage: string;
 
   @ManyToOne(() => UserEntity, (user) => user.sellerPayments, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'userId' })

@@ -13,4 +13,9 @@ export class CreateOrderDto {
   @IsNotEmpty({ message: 'Alamat pengiriman tidak boleh kosong' })
   @IsString()
   address: string;
+
+  @ApiProperty({ description: 'Metode pembayaran yang dipilih', example: 'COD' })
+  @IsNotEmpty({ message: 'Metode pembayaran tidak boleh kosong' })
+  @IsString()
+  payment_method: string;
 }

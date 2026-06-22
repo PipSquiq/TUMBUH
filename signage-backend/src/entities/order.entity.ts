@@ -63,7 +63,7 @@ export class OrderEntity {
     required: false,
   })
   @Column({ type: 'varchar', length: 255, nullable: true })
-  payment_proof: string;
+  payment_proof: string | null;
 
   @ApiProperty({
     description: 'Status pembayaran',
@@ -73,6 +73,14 @@ export class OrderEntity {
   })
   @Column({ type: 'varchar', length: 50, default: 'unpaid' })
   payment_status: string;
+
+  @ApiProperty({
+    description: 'Metode pembayaran yang dipilih',
+    example: 'Transfer Bank (BCA)',
+    required: false,
+  })
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  payment_method: string | null;
 
   @ManyToOne(() => ProductEntity, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'productId' })

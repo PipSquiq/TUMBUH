@@ -64,6 +64,7 @@ export class ProductsService {
         provider: pm.provider || null,
         accountNumber: pm.accountNumber || null,
         accountName: pm.accountName || null,
+        qrisImage: pm.qrisImage || null,
         user: { id: userId } as UserEntity,
       } as Partial<SellerPaymentEntity>);
       const saved = await this.sellerPaymentsRepository.save(payment as SellerPaymentEntity);
@@ -132,6 +133,7 @@ export class ProductsService {
         provider: pm.provider || null,
         accountNumber: pm.accountNumber || null,
         accountName: pm.accountName || null,
+        qrisImage: pm.qrisImage || null,
         user: { id: userId } as UserEntity,
       } as Partial<SellerPaymentEntity>);
       const saved = await this.sellerPaymentsRepository.save(payment as SellerPaymentEntity);
@@ -296,7 +298,7 @@ export class ProductsService {
   async findOne(id: string): Promise<ProductEntity> {
     const product = await this.productsRepository.findOne({ 
       where: { id },
-      relations: ['seller'], 
+      relations: ['seller', 'seller.sellerPayments'], 
     });
 
     if (!product) throw new NotFoundException('Produk tidak ditemukan');
@@ -358,6 +360,7 @@ export class ProductsService {
     productId: string,
     user: UserEntity,
     createOrderDto: CreateOrderDto,
+    paymentProofUrl?: string,
   ): Promise<OrderEntity> {
     const product = await this.findOne(productId);
     console.log(`[createOrder] Found product: ${product.name} (${product.id}), Seller: ${product.seller?.id}, Buyer: ${user.id}`);
@@ -383,15 +386,17 @@ export class ProductsService {
     await this.productsRepository.save(product);
 
     // Buat pesanan baru
-    const order = this.ordersRepository.create({
-      product_name: product.name,
-      qty: createOrderDto.qty,
-      buyer_name: user.username,
-      address: createOrderDto.address,
-      status: 'pending',
-      product,
-      buyer: user,
-    });
+    const order = this.ordersRepository.create();
+    order.product_name = product.name;
+    order.qty = createOrderDto.qty;
+    order.buyer_name = user.username;
+    order.address = createOrderDto.address;
+    order.payment_method = createOrderDto.payment_method || null;
+    order.payment_proof = paymentProofUrl || null;
+    order.payment_status = paymentProofUrl ? 'waiting' : 'unpaid';
+    order.status = 'pending';
+    order.product = product;
+    order.buyer = user;
 
     const savedOrder = await this.ordersRepository.save(order);
     console.log(`[createOrder] Saved order: ${savedOrder.id}, Status: ${savedOrder.status}`);
@@ -563,10 +568,6 @@ export class ProductsService {
     }
 
     order.payment_status = paymentStatus;
-
-    if (paymentStatus === 'verified') {
-      order.status = 'completed';
-    }
 
     return await this.ordersRepository.save(order);
   }

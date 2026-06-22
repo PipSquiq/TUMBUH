@@ -61,6 +61,34 @@ export class ProductsController {
     return await this.productsService.updateSellerPayments(req.user.id, registerSellerDto);
   }
 
+  @Post('seller/qris-upload')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(
+    FileInterceptor('image', {
+      fileFilter: (req, file, cb) => {
+        if (!file.originalname.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+          cb(new BadRequestException('Hanya file gambar yang diperbolehkan'), false);
+        } else {
+          cb(null, true);
+        }
+      },
+      limits: { fileSize: 5 * 1024 * 1024 },
+    }),
+  )
+  @ApiOperation({ summary: 'Unggah gambar QRIS pembayaran penjual' })
+  async uploadQris(
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: any,
+  ) {
+    if (!file) {
+      throw new BadRequestException('File gambar QRIS wajib diunggah');
+    }
+    const uploadResult = await this.cloudinaryService.uploadFile(file);
+    return {
+      qrisImage: uploadResult.secure_url,
+    };
+  }
+
   @Delete('seller/register')
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Mencabut status penjual (deactivate)' })
@@ -85,13 +113,40 @@ export class ProductsController {
 
   @Post(':id/order')
   @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Input pemesanan produk' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('image', {
+      fileFilter: (req, file, cb) => {
+        if (!file.originalname.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+          cb(new BadRequestException('Hanya file gambar bukti transfer yang diperbolehkan'), false);
+        } else {
+          cb(null, true);
+        }
+      },
+      limits: { fileSize: 5 * 1024 * 1024 },
+    }),
+  )
+  @ApiOperation({ summary: 'Membuat pesanan baru oleh pembeli' })
   async createOrder(
     @Param('id') id: string,
     @Body() createOrderDto: CreateOrderDto,
+    @UploadedFile() file: Express.Multer.File,
     @Req() req: any,
   ) {
-    return await this.productsService.createOrder(id, req.user, createOrderDto);
+    const payMethod = (createOrderDto.payment_method || '').toLowerCase().trim();
+    const isCod = payMethod.includes('cod') || payMethod === 'cod';
+
+    let paymentProofUrl: string | undefined = undefined;
+
+    if (!isCod) {
+      if (!file) {
+        throw new BadRequestException('Bukti transfer pembayaran digital wajib diunggah.');
+      }
+      const uploadResult = await this.cloudinaryService.uploadFile(file);
+      paymentProofUrl = uploadResult.secure_url;
+    }
+
+    return await this.productsService.createOrder(id, req.user, createOrderDto, paymentProofUrl);
   }
 
   @Post()

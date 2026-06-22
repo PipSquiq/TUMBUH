@@ -14,12 +14,12 @@ import { Type } from 'class-transformer';
 export class PaymentMethodDto {
   @ApiProperty({
     description: 'Jenis pembayaran',
-    enum: ['bank_transfer', 'e_wallet', 'cod'],
+    enum: ['bank_transfer', 'e_wallet', 'cod', 'qris'],
     example: 'bank_transfer',
   })
   @IsNotEmpty({ message: 'Jenis pembayaran wajib diisi' })
-  @IsEnum(['bank_transfer', 'e_wallet', 'cod'], {
-    message: 'Jenis pembayaran harus bank_transfer, e_wallet, atau cod',
+  @IsEnum(['bank_transfer', 'e_wallet', 'cod', 'qris'], {
+    message: 'Jenis pembayaran harus bank_transfer, e_wallet, cod, atau qris',
   })
   type: string;
 
@@ -28,7 +28,7 @@ export class PaymentMethodDto {
     example: 'BCA',
     required: false,
   })
-  @ValidateIf((o) => o.type !== 'cod')
+  @ValidateIf((o) => o.type === 'bank_transfer' || o.type === 'e_wallet')
   @IsNotEmpty({ message: 'Provider wajib diisi untuk bank_transfer dan e_wallet' })
   @IsString()
   provider?: string;
@@ -38,7 +38,7 @@ export class PaymentMethodDto {
     example: '1234567890',
     required: false,
   })
-  @ValidateIf((o) => o.type !== 'cod')
+  @ValidateIf((o) => o.type === 'bank_transfer' || o.type === 'e_wallet')
   @IsNotEmpty({ message: 'Nomor rekening/e-wallet wajib diisi untuk bank_transfer dan e_wallet' })
   @IsString()
   accountNumber?: string;
@@ -48,10 +48,20 @@ export class PaymentMethodDto {
     example: 'Budi Santoso',
     required: false,
   })
-  @ValidateIf((o) => o.type !== 'cod')
+  @ValidateIf((o) => o.type === 'bank_transfer' || o.type === 'e_wallet')
   @IsNotEmpty({ message: 'Nama pemegang akun wajib diisi untuk bank_transfer dan e_wallet' })
   @IsString()
   accountName?: string;
+
+  @ApiProperty({
+    description: 'URL gambar QRIS',
+    example: 'https://cloudinary.com/...',
+    required: false,
+  })
+  @ValidateIf((o) => o.type === 'qris')
+  @IsNotEmpty({ message: 'Gambar QRIS wajib diunggah' })
+  @IsString()
+  qrisImage?: string;
 }
 
 export class RegisterSellerDto {
