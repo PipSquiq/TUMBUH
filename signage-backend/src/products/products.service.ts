@@ -331,6 +331,13 @@ export class ProductsService {
     const { sellerId, ...productData } = updateProductDto;
     Object.assign(product, productData);
     
+    // Auto-update status based on stock
+    if (product.stock > 0) {
+      product.status = 'available';
+    } else {
+      product.status = 'unavailable';
+    }
+    
     return await this.productsRepository.save(product);
   }
 
@@ -371,7 +378,12 @@ export class ProductsService {
     }
 
     if (product.status === 'unavailable') {
-      throw new BadRequestException('Produk tidak tersedia untuk dipesan');
+      if (product.stock > 0) {
+        product.status = 'available';
+        await this.productsRepository.save(product);
+      } else {
+        throw new BadRequestException('Produk tidak tersedia untuk dipesan');
+      }
     }
 
     if (product.stock < createOrderDto.qty) {
