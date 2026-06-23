@@ -41,7 +41,7 @@ export class ProductsService {
   /**
    * Daftar sebagai penjual dengan data pembayaran
    */
-  async registerAsSeller(userId: string, dto: RegisterSellerDto): Promise<{ message: string; isSeller: boolean; paymentMethods: SellerPaymentEntity[] }> {
+  async registerAsSeller(userId: string, dto: RegisterSellerDto): Promise<{ message: string; isSeller: boolean; paymentMethods: SellerPaymentEntity[]; shippingCimahiUtara: number; shippingCimahiKota: number; shippingBandung: number }> {
     const user = await this.usersRepository.findOne({ where: { id: userId } });
     if (!user) {
       throw new NotFoundException('User tidak ditemukan');
@@ -73,19 +73,31 @@ export class ProductsService {
 
     // Set user sebagai penjual
     user.isSeller = true;
+    if (dto.shippingCimahiUtara !== undefined) {
+      user.shippingCimahiUtara = dto.shippingCimahiUtara;
+    }
+    if (dto.shippingCimahiKota !== undefined) {
+      user.shippingCimahiKota = dto.shippingCimahiKota;
+    }
+    if (dto.shippingBandung !== undefined) {
+      user.shippingBandung = dto.shippingBandung;
+    }
     await this.usersRepository.save(user);
 
     return {
       message: 'Berhasil terdaftar sebagai penjual!',
       isSeller: true,
       paymentMethods: paymentEntities,
+      shippingCimahiUtara: user.shippingCimahiUtara ? Number(user.shippingCimahiUtara) : 0,
+      shippingCimahiKota: user.shippingCimahiKota ? Number(user.shippingCimahiKota) : 0,
+      shippingBandung: user.shippingBandung ? Number(user.shippingBandung) : 0,
     };
   }
 
   /**
    * Cek status penjual dan data pembayaran
    */
-  async getSellerStatus(userId: string): Promise<{ isSeller: boolean; paymentMethods: SellerPaymentEntity[] }> {
+  async getSellerStatus(userId: string): Promise<{ isSeller: boolean; paymentMethods: SellerPaymentEntity[]; shippingCimahiUtara: number; shippingCimahiKota: number; shippingBandung: number }> {
     const user = await this.usersRepository.findOne({
       where: { id: userId },
       relations: ['sellerPayments'],
@@ -98,6 +110,9 @@ export class ProductsService {
     return {
       isSeller: user.isSeller,
       paymentMethods: user.sellerPayments || [],
+      shippingCimahiUtara: user.shippingCimahiUtara ? Number(user.shippingCimahiUtara) : 0,
+      shippingCimahiKota: user.shippingCimahiKota ? Number(user.shippingCimahiKota) : 0,
+      shippingBandung: user.shippingBandung ? Number(user.shippingBandung) : 0,
     };
   }
 
@@ -113,7 +128,7 @@ export class ProductsService {
   /**
    * Update metode pembayaran penjual (hapus semua lalu buat ulang)
    */
-  async updateSellerPayments(userId: string, dto: RegisterSellerDto): Promise<{ message: string; paymentMethods: SellerPaymentEntity[] }> {
+  async updateSellerPayments(userId: string, dto: RegisterSellerDto): Promise<{ message: string; paymentMethods: SellerPaymentEntity[]; shippingCimahiUtara: number; shippingCimahiKota: number; shippingBandung: number }> {
     const user = await this.usersRepository.findOne({ where: { id: userId } });
     if (!user) {
       throw new NotFoundException('User tidak ditemukan');
@@ -140,9 +155,23 @@ export class ProductsService {
       paymentEntities.push(saved as SellerPaymentEntity);
     }
 
+    if (dto.shippingCimahiUtara !== undefined) {
+      user.shippingCimahiUtara = dto.shippingCimahiUtara;
+    }
+    if (dto.shippingCimahiKota !== undefined) {
+      user.shippingCimahiKota = dto.shippingCimahiKota;
+    }
+    if (dto.shippingBandung !== undefined) {
+      user.shippingBandung = dto.shippingBandung;
+    }
+    await this.usersRepository.save(user);
+
     return {
       message: 'Metode pembayaran berhasil diperbarui!',
       paymentMethods: paymentEntities,
+      shippingCimahiUtara: user.shippingCimahiUtara ? Number(user.shippingCimahiUtara) : 0,
+      shippingCimahiKota: user.shippingCimahiKota ? Number(user.shippingCimahiKota) : 0,
+      shippingBandung: user.shippingBandung ? Number(user.shippingBandung) : 0,
     };
   }
 
@@ -397,6 +426,23 @@ export class ProductsService {
     }
     await this.productsRepository.save(product);
 
+    // Hitung ongkos kirim berdasarkan wilayah terpilih
+    let shippingCost = 0;
+    const deliveryOption = createOrderDto.delivery_option;
+    const seller = product.seller;
+
+    if (seller) {
+      if (deliveryOption === 'Cimahi Utara') {
+        shippingCost = seller.shippingCimahiUtara ? Number(seller.shippingCimahiUtara) : 0;
+      } else if (deliveryOption === 'Kota Cimahi dan sekitarnya') {
+        shippingCost = seller.shippingCimahiKota ? Number(seller.shippingCimahiKota) : 0;
+      } else if (deliveryOption === 'Bandung dan sekitarnya') {
+        shippingCost = seller.shippingBandung ? Number(seller.shippingBandung) : 0;
+      } else if (deliveryOption === 'Luar Daerah') {
+        shippingCost = 0;
+      }
+    }
+
     // Buat pesanan baru
     const order = this.ordersRepository.create();
     order.product_name = product.name;
@@ -404,6 +450,8 @@ export class ProductsService {
     order.buyer_name = user.username;
     order.address = createOrderDto.address;
     order.payment_method = createOrderDto.payment_method || null;
+    order.delivery_option = deliveryOption || null;
+    order.shipping_cost = shippingCost;
     order.payment_proof = paymentProofUrl || null;
     order.payment_status = paymentProofUrl ? 'waiting' : 'unpaid';
     order.status = 'pending';

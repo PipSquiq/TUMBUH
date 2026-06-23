@@ -82,6 +82,22 @@ export class OrderEntity {
   @Column({ type: 'varchar', length: 100, nullable: true })
   payment_method: string | null;
 
+  @ApiProperty({
+    description: 'Opsi wilayah pengantaran',
+    example: 'Cimahi Utara',
+    required: false,
+  })
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  delivery_option: string | null;
+
+  @ApiProperty({
+    description: 'Biaya ongkos kirim pesanan',
+    example: 10000,
+    default: 0,
+  })
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
+  shipping_cost: number;
+
   @ManyToOne(() => ProductEntity, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'productId' })
   product: ProductEntity;

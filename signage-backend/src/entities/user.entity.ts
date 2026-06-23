@@ -66,6 +66,19 @@ export class UserEntity {
   @OneToMany(() => SellerPaymentEntity, (payment) => payment.user)
   sellerPayments: SellerPaymentEntity[];
 
+  // --- TARIF ONGKIR WILAYAH PENJUAL ---
+  @ApiProperty({ example: 0, default: 0, description: 'Ongkir ke Cimahi Utara' })
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
+  shippingCimahiUtara: number;
+
+  @ApiProperty({ example: 0, default: 0, description: 'Ongkir ke Kota Cimahi & sekitarnya' })
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
+  shippingCimahiKota: number;
+
+  @ApiProperty({ example: 0, default: 0, description: 'Ongkir ke Bandung & sekitarnya' })
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
+  shippingBandung: number;
+
   @CreateDateColumn()
   createdAt: Date;
 

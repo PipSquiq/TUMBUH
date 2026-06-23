@@ -8,6 +8,7 @@ import {
   ValidateNested,
   ArrayMinSize,
   ValidateIf,
+  IsNumber,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -74,4 +75,22 @@ export class RegisterSellerDto {
   @ValidateNested({ each: true })
   @Type(() => PaymentMethodDto)
   paymentMethods: PaymentMethodDto[];
+
+  @ApiProperty({ example: 0, description: 'Ongkir Cimahi Utara', required: false })
+  @IsOptional()
+  @IsNumber({}, { message: 'Ongkir Cimahi Utara harus berupa angka' })
+  @Type(() => Number)
+  shippingCimahiUtara?: number;
+
+  @ApiProperty({ example: 0, description: 'Ongkir Kota Cimahi & sekitarnya', required: false })
+  @IsOptional()
+  @IsNumber({}, { message: 'Ongkir Kota Cimahi harus berupa angka' })
+  @Type(() => Number)
+  shippingCimahiKota?: number;
+
+  @ApiProperty({ example: 0, description: 'Ongkir Bandung & sekitarnya', required: false })
+  @IsOptional()
+  @IsNumber({}, { message: 'Ongkir Bandung harus berupa angka' })
+  @Type(() => Number)
+  shippingBandung?: number;
 }
