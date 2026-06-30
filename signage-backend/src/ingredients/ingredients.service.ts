@@ -58,12 +58,37 @@ export class IngredientsService {
   }
 
   async findByLabel(label: string): Promise<IngredientEntity> {
-    // Diubah menggunakan CreateQueryBuilder + ILIKE agar pencarian text lebih fleksibel 
-    // Contoh: label AI "TELOR" tetap bisa mencocokkan baris DB bernama "telur"
-    const ingredient = await this.ingredientRepository
+    const searchName = label.toLowerCase();
+    
+    // Mapping label dari AI ke nama bahan di database jika ada perbedaan kata/ejaan
+    const labelMapping: Record<string, string> = {
+      'telor': 'telur',
+    };
+    
+    const targetName = labelMapping[searchName] || searchName;
+
+    // 1. Cari kecocokan sama persis (case-insensitive) terlebih dahulu
+    let ingredient = await this.ingredientRepository
       .createQueryBuilder('ingredient')
-      .where('ingredient.name ILIKE :label', { label: `%${label}%` })
+      .where('LOWER(ingredient.name) = :targetName', { targetName })
       .getOne();
+
+    // 2. Jika tidak ada yang sama persis, cari dengan ILIKE dan filter secara pintar di memori
+    if (!ingredient) {
+      const candidates = await this.ingredientRepository
+        .createQueryBuilder('ingredient')
+        .where('ingredient.name ILIKE :pattern', { pattern: `%${targetName}%` })
+        .getMany();
+
+      if (candidates.length > 0) {
+        // Cari yang nama bahannya mengandung kata utuh (word boundary), 
+        // misalnya "Dada Ayam" mengandung kata "ayam", tapi "Bayam" tidak mengandung kata "ayam" sebagai kata utuh.
+        const wordRegex = new RegExp(`\\b${targetName}\\b`, 'i');
+        const bestMatch = candidates.find(c => wordRegex.test(c.name));
+        
+        ingredient = bestMatch || candidates[0];
+      }
+    }
 
     if (!ingredient) {
       throw new NotFoundException(
